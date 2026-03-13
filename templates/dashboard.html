@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+{% block body %}
+<h2>Dashboard</h2>
+<div style="display:flex;gap:18px;flex-wrap:wrap">
+  <div style="flex:1;min-width:280px">
+    <h3>Inventory Value by Status</h3>
+    <canvas id="valueChart" height="160"></canvas>
+  </div>
+  <div style="flex:1;min-width:280px">
+    <h3>Counts by Status</h3>
+    <canvas id="countChart" height="160"></canvas>
+  </div>
+</div>
+
+<script>
+fetch("{{ url_for('api_stats') }}")
+  .then(r=>r.json())
+  .then(data=>{
+    const labels = data.labels;
+    const values = data.values;
+    const counts = data.counts;
+
+    const ctx1 = document.getElementById('valueChart').getContext('2d');
+    new Chart(ctx1, {type:'bar', data:{labels:labels, datasets:[{label:'Total selling value', data:values}]}});
+
+    const ctx2 = document.getElementById('countChart').getContext('2d');
+    new Chart(ctx2, {type:'pie', data:{labels:labels, datasets:[{label:'Counts', data:counts}]}});
+
+    const totVal = values.reduce((a,b)=>a+(b||0),0);
+    const totCount = counts.reduce((a,b)=>a+(b||0),0);
+    const el = document.createElement('div');
+    el.innerHTML = `<p class="muted">Total inventory value: $${totVal.toFixed(2)} — Items: ${totCount}</p>`;
+    document.querySelector('h2').after(el);
+  });
+</script>
+{% endblock %}

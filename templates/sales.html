@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<h2>Sales</h2>
+<p class="muted">This simple page is a starting point for sales reports.</p>
+<table>
+  <thead><tr><th>SKU</th><th>Sold On</th><th>Selling Price</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+      <tr><td>{{ r['sku'] }}</td><td>{{ r['date_sold'] }}</td><td>${{ '%.2f'|format(r['selling_price'] or 0) }}</td></tr>
+    {% else %}
+      <tr><td colspan=3 class="muted">No sales found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

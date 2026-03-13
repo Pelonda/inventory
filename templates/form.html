@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block body %}
+<h2>{{ 'Edit' if item else 'Add' }} Laptop</h2>
+<form method="post">
+  <label>SKU: <input name="sku" value="{{ item.sku if item else '' }}" required></label>
+  <label>Brand: <input name="brand" value="{{ item.brand if item else '' }}"></label>
+  <label>Model: <input name="model" value="{{ item.model if item else '' }}"></label>
+  <label>Serial: <input name="serial" value="{{ item.serial if item else '' }}"></label>
+  <label>CPU: <input name="cpu" value="{{ item.cpu if item else '' }}"></label>
+  <label>RAM (GB): <input type="number" name="ram_gb" value="{{ item.ram_gb if item else '' }}"></label>
+  <label>Storage: <input name="storage" value="{{ item.storage if item else '' }}"></label>
+  <label>Initial price: <input type="number" step="0.01" name="initial_price" value="{{ item.initial_price if item else '' }}"></label>
+  <label>Selling price: <input type="number" step="0.01" name="selling_price" value="{{ item.selling_price if item else '' }}"></label>
+  <label>Location: <input name="location" value="{{ item.location if item else '' }}"></label>
+  <label>Status:
+    <select name="status">
+      <option value="in_stock" {% if item and item.status=='in_stock' %}selected{% endif %}>in_stock</option>
+      <option value="sold" {% if item and item.status=='sold' %}selected{% endif %}>sold</option>
+      <option value="reserved" {% if item and item.status=='reserved' %}selected{% endif %}>reserved</option>
+      <option value="out_for_repair" {% if item and item.status=='out_for_repair' %}selected{% endif %}>out_for_repair</option>
+    </select>
+  </label>
+  <label>Notes:<br><textarea name="notes" rows="3" cols="60">{{ item.notes if item else '' }}</textarea></label><br><br>
+  <button type="submit" class="btn">Save</button>
+  <a href="{{ url_for('index') }}" class="btn secondary">Cancel</a>
+</form>
+{% endblock %}
