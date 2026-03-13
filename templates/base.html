@@ -1,24 +1,25 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Awaken Laptop Inventory</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <title>Awaken · Laptop Inventory</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   {% block head %}{% endblock %}
 </head>
 <body>
-  <!-- optional particle background -->
+  <!-- particle background (optional) -->
   <div id="particles" style="position:fixed;inset:0;z-index:-1;pointer-events:none"></div>
 
   <div class="container">
-    <header class="header card" role="banner">
+    <header class="header card" role="banner" aria-label="Site header">
       <img class="logo" src="{{ url_for('static', filename='img/awaken-logo.png') }}" alt="Awaken logo">
       <div>
         <div class="title">Laptop Inventory</div>
         <div class="small">Awaken — IT · Software · AI</div>
       </div>
-      <div class="header-right">
+
+      <div class="header-right" role="navigation" aria-label="User">
         {% if current_user.is_authenticated %}
           <div class="small">Hello, {{ current_user.username }} ({{ current_user.role }})</div>
           <a href="{{ url_for('logout') }}">Logout</a>
@@ -28,7 +29,7 @@
       </div>
     </header>
 
-    <div class="controls">
+    <div class="controls" aria-label="Main controls">
       <a class="btn" href="{{ url_for('add') }}">+ Add Laptop</a>
       <a class="btn secondary" href="{{ url_for('export_csv') }}">Export CSV</a>
       <a class="btn secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
@@ -44,7 +45,7 @@
       {% if messages %}
         <div>
           {% for cat, msg in messages %}
-            <div style="padding:10px;margin-bottom:10px;border-radius:8px;background:{{ '#d4edda' if cat=='success' else '#f8d7da' }};color:{{ '#155724' if cat=='success' else '#721c24' }}">{{ msg }}</div>
+            <div style="padding:10px;margin-bottom:10px;border-radius:8px;background:{{ '#d4edda' if cat=='success' else '#fff3cd' if cat=='warning' else '#f8d7da' }};color:{{ '#155724' if cat=='success' else '#856404' if cat=='warning' else '#721c24' }}">{{ msg }}</div>
           {% endfor %}
         </div>
       {% endif %}
@@ -55,12 +56,11 @@
     <footer class="muted" style="margin-top:18px">Simple Flask + SQLite demo — For production: add HTTPS, backups, auth hardening, and a proper DB.</footer>
   </div>
 
-  <!-- particles (optional) -->
+  <!-- particles script (optional) -->
   <script src="{{ url_for('static', filename='js/particles.js') }}"></script>
   <script>
-    // if particles.js defines initParticles() call it, otherwise safe no-op
     if (typeof initParticles === 'function') {
-      initParticles('particles');
+      try { initParticles('particles'); } catch(e) { console.warn('particles init failed', e); }
     }
   </script>
 

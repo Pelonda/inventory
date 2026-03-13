@@ -2,19 +2,27 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
+
 {% block body %}
-<h2>Dashboard</h2>
-<div style="display:flex;gap:18px;flex-wrap:wrap">
-  <div style="flex:1;min-width:280px">
-    <h3>Inventory Value by Status</h3>
-    <canvas id="valueChart" height="160"></canvas>
+<div class="card">
+  <h2>Dashboard</h2>
+
+  <div style="display:flex;gap:18px;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px">
+      <h3>Inventory Value by Status</h3>
+      <canvas id="valueChart" height="160"></canvas>
+    </div>
+
+    <div style="flex:1;min-width:280px">
+      <h3>Counts by Status</h3>
+      <canvas id="countChart" height="160"></canvas>
+    </div>
   </div>
-  <div style="flex:1;min-width:280px">
-    <h3>Counts by Status</h3>
-    <canvas id="countChart" height="160"></canvas>
-  </div>
+
+  <div id="totals" style="margin-top:12px" aria-live="polite"></div>
 </div>
 
+{% block scripts %}
 <script>
 fetch("{{ url_for('api_stats') }}")
   .then(r=>r.json())
@@ -24,16 +32,15 @@ fetch("{{ url_for('api_stats') }}")
     const counts = data.counts;
 
     const ctx1 = document.getElementById('valueChart').getContext('2d');
-    new Chart(ctx1, {type:'bar', data:{labels:labels, datasets:[{label:'Total selling value', data:values}]}});
+    new Chart(ctx1, {type:'bar', data:{labels:labels, datasets:[{label:'Total selling value', data:values, backgroundColor:'rgba(21,101,232,0.85)'}]}, options:{responsive:true}});
 
     const ctx2 = document.getElementById('countChart').getContext('2d');
-    new Chart(ctx2, {type:'pie', data:{labels:labels, datasets:[{label:'Counts', data:counts}]}});
+    new Chart(ctx2, {type:'pie', data:{labels:labels, datasets:[{label:'Counts', data:counts}]}, options:{responsive:true}});
 
     const totVal = values.reduce((a,b)=>a+(b||0),0);
     const totCount = counts.reduce((a,b)=>a+(b||0),0);
-    const el = document.createElement('div');
-    el.innerHTML = `<p class="muted">Total inventory value: $${totVal.toFixed(2)} — Items: ${totCount}</p>`;
-    document.querySelector('h2').after(el);
-  });
+    document.getElementById('totals').innerHTML = `<p class="muted">Total inventory value: <strong>$${totVal.toFixed(2)}</strong> — Items: <strong>${totCount}</strong></p>`;
+  }).catch(e=>{ console.warn(e); document.getElementById('totals').innerText='Stats unavailable'; });
 </script>
+{% endblock %}
 {% endblock %}

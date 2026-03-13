@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Awaken — Loading</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#07102a,#0f1b55);color:#fff}
+    .logo{width:320px;animation:float 2.8s ease-in-out infinite;filter:drop-shadow(0 20px 30px rgba(76,201,240,0.12))}
+    @keyframes float{0%{transform:translateY(0)}50%{transform:translateY(-10px)}100%{transform:translateY(0)}}
+    .glow{position:absolute;inset:auto;bottom:6rem;left:50%;transform:translateX(-50%);opacity:0.85}
+  </style>
+</head>
+<body>
+  <div style="text-align:center">
+    <img src="{{ url_for('static', filename='img/awaken-logo.png') }}" class="logo" alt="Awaken">
+    <div class="glow">Awaken • IT • Software • AI</div>
+  </div>
+  <script>setTimeout(()=>location.href="{{ url_for('dashboard') }}", 1200);</script>
+</body>
+</html>

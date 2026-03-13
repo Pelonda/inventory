@@ -1,9 +1,18 @@
 {% extends "base.html" %}
 {% block body %}
-<h2>Login</h2>
-<form method="post">
-  <label>Username: <input name="username" required></label>
-  <label>Password: <input name="password" type="password" required></label>
-  <button class="btn">Login</button>
-</form>
+<div class="card" style="max-width:520px">
+  <h2>Login</h2>
+  <form method="post" style="display:grid;gap:12px">
+    <label>Username
+      <input name="username" required autocomplete="username">
+    </label>
+    <label>Password
+      <input name="password" type="password" required autocomplete="current-password">
+    </label>
+    <div style="display:flex;gap:8px">
+      <button class="btn" type="submit">Login</button>
+      <a class="btn secondary" href="{{ url_for('splash') }}">Back</a>
+    </div>
+  </form>
+</div>
 {% endblock %}

@@ -1,53 +1,79 @@
 {% extends "base.html" %}
 {% block body %}
-<form method="get" style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
-  <label>Status
-    <select name="status">
-      <option value="">-- all --</option>
-      <option value="in_stock" {% if qstatus=='in_stock' %}selected{% endif %}>In stock</option>
-      <option value="sold" {% if qstatus=='sold' %}selected{% endif %}>Sold</option>
-      <option value="reserved" {% if qstatus=='reserved' %}selected{% endif %}>Reserved</option>
-      <option value="out_for_repair" {% if qstatus=='out_for_repair' %}selected{% endif %}>Out for repair</option>
-    </select>
-  </label>
-  <label>Search <input name="q" value="{{ q or '' }}"></label>
-  <button class="btn secondary">Filter</button>
-</form>
+<section class="card" aria-labelledby="list-heading">
+  <h2 id="list-heading">Inventory</h2>
 
-<table>
-  <thead><tr>
-    <th>SKU</th><th>Brand / Model</th><th>Serial</th><th>Specs</th><th>Initial</th><th>Selling</th><th>Status</th><th>Location</th><th>Actions</th>
-  </tr></thead>
-  <tbody>
-    {% for r in items %}
-    <tr>
-      <td>{{ r['sku'] }}</td>
-      <td><strong>{{ r['brand'] }}</strong><br>{{ r['model'] }}</td>
-      <td>{{ r['serial'] or '' }}</td>
-      <td>{{ r['cpu'] or '' }} / {{ r['ram_gb'] or '' }}GB / {{ r['storage'] or '' }}</td>
-      <td>${{ '%.2f'|format(r['initial_price'] or 0) }}</td>
-      <td>${{ '%.2f'|format(r['selling_price'] or 0) }}</td>
-      <td>{{ r['status'] or '' }}</td>
-      <td>{{ r['location'] or '' }}</td>
-      <td>
-        <a href="{{ url_for('edit', item_id=r['id']) }}">Edit</a> |
-        <a href="{{ url_for('gen_barcode', sku=r['sku']) }}" target="_blank">Barcode</a> |
-        <a href="{{ url_for('gen_qr', data=r['sku']) }}" target="_blank">QR</a> |
-        <form style="display:inline" method="post" action="{{ url_for('toggle_out', item_id=r['id']) }}">
-          {% if r['status']!='sold' %}
-            <button type="submit" class="small">Mark as Sold</button>
-          {% else %}
-            <button type="submit" class="small">Mark In Stock</button>
-          {% endif %}
-        </form>
-        <form style="display:inline" method="post" action="{{ url_for('delete', item_id=r['id']) }}" onsubmit="return confirm('Delete this item?');">
-          <button type="submit" style="background:#d9534f;color:white;border:none;padding:4px 8px;margin-left:4px">Delete</button>
-        </form>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan=9 class="muted">No items found.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+  <form method="get" style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <label>
+      Status
+      <select name="status">
+        <option value="">-- all --</option>
+        <option value="in_stock" {% if qstatus=='in_stock' %}selected{% endif %}>In stock</option>
+        <option value="sold" {% if qstatus=='sold' %}selected{% endif %}>Sold</option>
+        <option value="reserved" {% if qstatus=='reserved' %}selected{% endif %}>Reserved</option>
+        <option value="out_for_repair" {% if qstatus=='out_for_repair' %}selected{% endif %}>Out for repair</option>
+      </select>
+    </label>
+
+    <label>
+      Search
+      <input name="q" value="{{ q or '' }}" placeholder="SKU, brand, model, serial">
+    </label>
+
+    <button class="btn secondary" type="submit">Filter</button>
+  </form>
+
+  <div style="overflow-x:auto">
+    <table class="table" role="table" aria-label="Laptop list">
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Brand / Model</th>
+          <th>Serial</th>
+          <th>Specs</th>
+          <th>Initial</th>
+          <th>Selling</th>
+          <th>Status</th>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in items %}
+          <tr>
+            <td>{{ r['sku'] }}</td>
+            <td><strong>{{ r['brand'] }}</strong><br>{{ r['model'] }}</td>
+            <td>{{ r['serial'] or '' }}</td>
+            <td>{{ r['cpu'] or '' }} / {{ r['ram_gb'] or '' }}GB / {{ r['storage'] or '' }}</td>
+            <td>${{ '%.2f'|format(r['initial_price'] or 0) }}</td>
+            <td>${{ '%.2f'|format(r['selling_price'] or 0) }}</td>
+            <td>{{ r['status'] or '' }}</td>
+            <td>{{ r['location'] or '' }}</td>
+            <td>
+              <a href="{{ url_for('edit', item_id=r['id']) }}">Edit</a>
+              <span style="color:#ccc">|</span>
+              <a href="{{ url_for('gen_barcode', sku=r['sku']) }}" target="_blank">Barcode</a>
+              <span style="color:#ccc">|</span>
+              <a href="{{ url_for('gen_qr', data=r['sku']) }}" target="_blank">QR</a>
+              <div style="margin-top:6px">
+                <form style="display:inline" method="post" action="{{ url_for('toggle_out', item_id=r['id']) }}">
+                  {% if r['status']!='sold' %}
+                    <button type="submit" class="small">Mark as Sold</button>
+                  {% else %}
+                    <button type="submit" class="small">Mark In Stock</button>
+                  {% endif %}
+                </form>
+                <form style="display:inline" method="post" action="{{ url_for('delete', item_id=r['id']) }}" onsubmit="return confirm('Delete this item?');">
+                  <button type="submit" style="background:#d9534f;color:white;border:none;padding:4px 8px;margin-left:6px">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="muted">No items found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}

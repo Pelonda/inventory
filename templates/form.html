@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block body %}
-<div class="card">
-  <h2>{{ 'Edit' if item else 'Add' }} Laptop</h2>
+<div class="card" role="region" aria-labelledby="form-title">
+  <h2 id="form-title">{{ 'Edit' if item else 'Add' }} Laptop</h2>
 
   <form method="post" novalidate>
     <div class="form-grid">
       <label for="sku">SKU</label>
-      <input id="sku" name="sku" type="text" value="{{ item.sku if item else '' }}" required>
+      <input id="sku" name="sku" type="text" value="{{ item.sku if item else '' }}" placeholder="AWK0001 (leave blank to auto-generate)">
 
       <label for="brand">Brand</label>
       <input id="brand" name="brand" type="text" value="{{ item.brand if item else '' }}">
@@ -21,7 +21,7 @@
       <input id="cpu" name="cpu" type="text" value="{{ item.cpu if item else '' }}">
 
       <label for="ram_gb">RAM (GB)</label>
-      <input id="ram_gb" name="ram_gb" type="number" value="{{ item.ram_gb if item else '' }}">
+      <input id="ram_gb" name="ram_gb" type="number" min="0" value="{{ item.ram_gb if item else '' }}">
 
       <label for="storage">Storage</label>
       <input id="storage" name="storage" type="text" value="{{ item.storage if item else '' }}">
