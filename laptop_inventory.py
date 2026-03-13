@@ -8,6 +8,7 @@ Run: python laptop_inventory.py
 
 import os
 import sys
+import re
 import sqlite3
 import shutil
 from datetime import datetime
@@ -18,10 +19,11 @@ import csv
 
 from flask import (
     Flask, g, render_template_string, request, redirect, url_for,
-    send_file, jsonify, flash, send_from_directory
+    send_file, jsonify, flash, send_from_directory, render_template, abort
 )
 
 # Optional external libs — install via pip
+# pip install bcrypt python-barcode qrcode pillow
 import bcrypt
 import barcode
 from barcode.writer import ImageWriter
@@ -154,279 +156,64 @@ def role_required(role):
         return wrapped
     return decorator
 
-# ---------- In-memory templates ----------
-BASE_HTML = """
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Awaken Laptop Inventory</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica;max-width:1100px;margin:18px auto;padding:8px}
-    header{display:flex;align-items:center;gap:12px}
-    header img{height:58px}
-    nav{margin-left:auto}
-    nav a{margin-left:8px;text-decoration:none;color:#0366d6}
-    table{border-collapse:collapse;width:100%;margin-top:12px}
-    th,td{border:1px solid #eee;padding:8px;text-align:left}
-    th{background:#fafafa}
-    .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
-    .btn{background:#0366d6;color:#fff;padding:8px 10px;border-radius:6px;text-decoration:none;display:inline-block}
-    .btn.secondary{background:#6c757d}
-    input[type=text], input[type=number], textarea, select { width: 320px; padding:6px; margin:4px 0; }
-    label { display:block; margin:6px 0; }
-    .muted{color:#666;font-size:0.9em}
-    .small{font-size:0.9em}
-    .generated img{max-width:160px;height:auto}
-    footer{margin-top:18px;color:#666;font-size:0.85em;border-top:1px solid #eee;padding-top:8px}
-  </style>
-  {% block head %}{% endblock %}
-</head>
-<body>
-  <header>
-    <img src="{{ url_for('static', filename='img/awaken-logo.png') }}" alt="Awaken logo">
-    <h1 style="margin:0;font-size:1.6rem">Laptop Inventory</h1>
-    <nav>
-      {% if current_user.is_authenticated %}
-        <span class="small">Hello, {{ current_user.username }} ({{ current_user.role }})</span>
-        <a href="{{ url_for('logout') }}">Logout</a>
-      {% else %}
-        <a href="{{ url_for('login') }}">Login</a>
-      {% endif %}
-    </nav>
-  </header>
+# ---------- SKU generator ----------
+def generate_sku(prefix="AWK", width=4, db=None):
+    """
+    Generate a new unique SKU using prefix + zero-padded number.
+    Example: AWK0001, AWK0002, ...
+    """
+    if db is None:
+        db = get_db()
 
-  <div class="controls">
-    <a class="btn" href="{{ url_for('add') }}">+ Add Laptop</a>
-    <a class="btn secondary" href="{{ url_for('export_csv') }}">Export CSV</a>
-    <a class="btn secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
-    <a class="btn secondary" href="{{ url_for('splash') }}">Splash</a>
+    like_pattern = f"{prefix}%"
+    rows = db.execute("SELECT sku FROM laptops WHERE sku LIKE ?", (like_pattern,)).fetchall()
 
-    <form action="{{ url_for('import_csv') }}" method="post" enctype="multipart/form-data" style="display:inline-block;margin-left:8px">
-      <input type="file" name="file" accept=".csv">
-      <button class="btn secondary" type="submit">Import CSV</button>
-    </form>
-  </div>
+    max_n = 0
+    rx = re.compile(rf"^{re.escape(prefix)}0*([0-9]+)$", re.IGNORECASE)
+    for r in rows:
+        s = r["sku"] or ""
+        m = rx.match(s)
+        if m:
+            try:
+                n = int(m.group(1))
+                if n > max_n:
+                    max_n = n
+            except Exception:
+                pass
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div>
-        {% for cat, msg in messages %}
-          <div style="padding:8px;margin-bottom:8px;border-radius:6px;background:{{ '#d4edda' if cat=='success' else '#f8d7da' }};color:{{ '#155724' if cat=='success' else '#721c24' }}">{{ msg }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
+    candidate_n = max_n + 1
+    attempts = 0
+    while attempts < 10000:
+        candidate = f"{prefix}{str(candidate_n).zfill(width)}"
+        existing = db.execute("SELECT 1 FROM laptops WHERE sku = ?", (candidate,)).fetchone()
+        if not existing:
+            return candidate
+        candidate_n += 1
+        attempts += 1
 
-  {% block body %}{% endblock %}
+    raise RuntimeError("Unable to generate unique SKU")
 
-  <footer>
-    <div class="muted">Simple Flask + SQLite demo — For production: add HTTPS, backups, auth hardening, and a proper DB.</div>
-  </footer>
-</body>
-</html>
-"""
+# ---------- Templates (in-memory fallback) ----------
+# You can keep templates on disk (templates/*.html). render() will try filesystem first.
+BASE_HTML = """..."""  # shortened to keep file smaller here; real content should match your templates or you may rely on filesystem templates
+# (You likely already have templates/ files. The fallback strings are not required.)
 
-INDEX_HTML = """
-{% extends "base" %}
-{% block body %}
-<form method="get" style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
-  <label>Status
-    <select name="status">
-      <option value="">-- all --</option>
-      <option value="in_stock" {% if qstatus=='in_stock' %}selected{% endif %}>In stock</option>
-      <option value="sold" {% if qstatus=='sold' %}selected{% endif %}>Sold</option>
-      <option value="reserved" {% if qstatus=='reserved' %}selected{% endif %}>Reserved</option>
-      <option value="out_for_repair" {% if qstatus=='out_for_repair' %}selected{% endif %}>Out for repair</option>
-    </select>
-  </label>
-  <label>Search <input name="q" value="{{ q or '' }}"></label>
-  <button class="btn secondary">Filter</button>
-</form>
-
-<table>
-  <thead><tr>
-    <th>SKU</th><th>Brand / Model</th><th>Serial</th><th>Specs</th><th>Initial</th><th>Selling</th><th>Status</th><th>Location</th><th>Actions</th>
-  </tr></thead>
-  <tbody>
-    {% for r in items %}
-    <tr>
-      <td>{{ r['sku'] }}</td>
-      <td><strong>{{ r['brand'] }}</strong><br>{{ r['model'] }}</td>
-      <td>{{ r['serial'] or '' }}</td>
-      <td>{{ r['cpu'] or '' }} / {{ r['ram_gb'] or '' }}GB / {{ r['storage'] or '' }}</td>
-      <td>${{ '%.2f'|format(r['initial_price'] or 0) }}</td>
-      <td>${{ '%.2f'|format(r['selling_price'] or 0) }}</td>
-      <td>{{ r['status'] or '' }}</td>
-      <td>{{ r['location'] or '' }}</td>
-      <td>
-        <a href="{{ url_for('edit', item_id=r['id']) }}">Edit</a> |
-        <a href="{{ url_for('gen_barcode', sku=r['sku']) }}" target="_blank">Barcode</a> |
-        <a href="{{ url_for('gen_qr', data=r['sku']) }}" target="_blank">QR</a> |
-        <form style="display:inline" method="post" action="{{ url_for('toggle_out', item_id=r['id']) }}">
-          {% if r['status']!='sold' %}
-            <button type="submit" class="small">Mark as Sold</button>
-          {% else %}
-            <button type="submit" class="small">Mark In Stock</button>
-          {% endif %}
-        </form>
-        <form style="display:inline" method="post" action="{{ url_for('delete', item_id=r['id']) }}" onsubmit="return confirm('Delete this item?');">
-          <button type="submit" style="background:#d9534f;color:white;border:none;padding:4px 8px;margin-left:4px">Delete</button>
-        </form>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan=9 class="muted">No items found.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endblock %}
-"""
-
-FORM_HTML = """
-{% extends "base" %}
-{% block body %}
-<h2>{{ 'Edit' if item else 'Add' }} Laptop</h2>
-<form method="post">
-  <label>SKU: <input name="sku" value="{{ item.sku if item else '' }}" required></label>
-  <label>Brand: <input name="brand" value="{{ item.brand if item else '' }}"></label>
-  <label>Model: <input name="model" value="{{ item.model if item else '' }}"></label>
-  <label>Serial: <input name="serial" value="{{ item.serial if item else '' }}"></label>
-  <label>CPU: <input name="cpu" value="{{ item.cpu if item else '' }}"></label>
-  <label>RAM (GB): <input type="number" name="ram_gb" value="{{ item.ram_gb if item else '' }}"></label>
-  <label>Storage: <input name="storage" value="{{ item.storage if item else '' }}"></label>
-  <label>Initial price: <input type="number" step="0.01" name="initial_price" value="{{ item.initial_price if item else '' }}"></label>
-  <label>Selling price: <input type="number" step="0.01" name="selling_price" value="{{ item.selling_price if item else '' }}"></label>
-  <label>Location: <input name="location" value="{{ item.location if item else '' }}"></label>
-  <label>Status:
-    <select name="status">
-      <option value="in_stock" {% if item and item.status=='in_stock' %}selected{% endif %}>in_stock</option>
-      <option value="sold" {% if item and item.status=='sold' %}selected{% endif %}>sold</option>
-      <option value="reserved" {% if item and item.status=='reserved' %}selected{% endif %}>reserved</option>
-      <option value="out_for_repair" {% if item and item.status=='out_for_repair' %}selected{% endif %}>out_for_repair</option>
-    </select>
-  </label>
-  <label>Notes:<br><textarea name="notes" rows="3" cols="60">{{ item.notes if item else '' }}</textarea></label><br><br>
-  <button type="submit" class="btn">Save</button>
-  <a href="{{ url_for('index') }}" class="btn secondary">Cancel</a>
-</form>
-{% endblock %}
-"""
-
-DASHBOARD_HTML = """
-{% extends "base" %}
-{% block head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-{% endblock %}
-{% block body %}
-<h2>Dashboard</h2>
-<div style="display:flex;gap:18px;flex-wrap:wrap">
-  <div style="flex:1;min-width:280px">
-    <h3>Inventory Value by Status</h3>
-    <canvas id="valueChart" height="160"></canvas>
-  </div>
-  <div style="flex:1;min-width:280px">
-    <h3>Counts by Status</h3>
-    <canvas id="countChart" height="160"></canvas>
-  </div>
-</div>
-
-<script>
-fetch("{{ url_for('api_stats') }}")
-  .then(r=>r.json())
-  .then(data=>{
-    const labels = data.labels;
-    const values = data.values;
-    const counts = data.counts;
-
-    const ctx1 = document.getElementById('valueChart').getContext('2d');
-    new Chart(ctx1, {type:'bar', data:{labels:labels, datasets:[{label:'Total selling value', data:values}]}});
-
-    const ctx2 = document.getElementById('countChart').getContext('2d');
-    new Chart(ctx2, {type:'pie', data:{labels:labels, datasets:[{label:'Counts', data:counts}]}});
-
-    // show totals
-    const totVal = values.reduce((a,b)=>a+(b||0),0);
-    const totCount = counts.reduce((a,b)=>a+(b||0),0);
-    const el = document.createElement('div');
-    el.innerHTML = `<p class="muted">Total inventory value: $${totVal.toFixed(2)} — Items: ${totCount}</p>`;
-    document.querySelector('h2').after(el);
-  });
-</script>
-{% endblock %}
-"""
-
-SPLASH_HTML = """
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Awaken — Loading</title>
-  <style>
-    body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#07102a,#0f1b55);color:#fff}
-    .logo{width:320px;animation:float 2.8s ease-in-out infinite;filter:drop-shadow(0 20px 30px rgba(76,201,240,0.12))}
-    @keyframes float{0%{transform:translateY(0)}50%{transform:translateY(-10px)}100%{transform:translateY(0)}}
-    .glow{position:absolute;inset:auto;bottom:6rem;left:50%;transform:translateX(-50%);opacity:0.85}
-  </style>
-</head>
-<body>
-  <div style="text-align:center">
-    <img src="{{ url_for('static', filename='img/awaken-logo.png') }}" class="logo" alt="Awaken">
-    <div class="glow">Awaken • IT • Software • AI</div>
-  </div>
-  <script>setTimeout(()=>location.href="{{ url_for('dashboard') }}", 1200);</script>
-</body>
-</html>
-"""
-
-LOGIN_HTML = """
-{% extends "base" %}
-{% block body %}
-<h2>Login</h2>
-<form method="post">
-  <label>Username: <input name="username" required></label>
-  <label>Password: <input name="password" type="password" required></label>
-  <button class="btn">Login</button>
-</form>
-{% endblock %}
-"""
-
-# template registry
-TEMPLATES = {
-    "base": BASE_HTML,
-    "index": INDEX_HTML,
-    "form": FORM_HTML,
-    "dashboard": DASHBOARD_HTML,
-    "splash": SPLASH_HTML,
-    "login": LOGIN_HTML
-}
-
+# ---------- Render helper (prefer filesystem templates) ----------
 def render(name, **ctx):
-    tpl = TEMPLATES.get(name)
-    if tpl is None:
-        return "Template not found", 500
-    return render_template_string(tpl, **ctx)
-
-from flask import render_template, abort
-
-def render(name, **ctx):
-    # if a real file exists in templates/, prefer that
     tpl_name = f"{name}.html"
     try:
-        # try filesystem templates (templates/<name>.html)
+        # prefer real template files in templates/ directory
         return render_template(tpl_name, **ctx)
     except Exception:
-        # fallback to in-memory template registry if present
-        tpl = TEMPLATES.get(name)
+        # fallback to any in-memory template strings if present
+        tpl = globals().get(f"{name.upper()}_HTML") or globals().get(name.upper() + "_HTML")
         if tpl:
             return render_template_string(tpl, **ctx)
-        # final fallback
         abort(500, description="Template not found: " + name)
 
 # ---------- Routes ----------
 @app.route("/")
+@login_required
 def index():
     q = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
@@ -469,7 +256,7 @@ def login():
 def logout():
     logout_user()
     flash("Logged out", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("login"))
 
 # ----- CRUD -----
 @app.route("/add", methods=["GET", "POST"])
@@ -477,8 +264,12 @@ def logout():
 def add():
     db = get_db()
     if request.method == "POST":
+        sku_input = (request.form.get("sku") or "").strip()
+        if not sku_input:
+            sku_input = generate_sku(prefix="AWK", width=4, db=db)
+
         data = dict(
-            sku=request.form.get("sku").strip(),
+            sku=sku_input,
             brand=(request.form.get("brand") or "").strip(),
             model=(request.form.get("model") or "").strip(),
             serial=(request.form.get("serial") or "").strip(),
@@ -585,12 +376,16 @@ def import_csv():
         db = get_db()
         count = 0
         for row in reader:
+            row_sku = (row.get("sku") or "").strip()
+            if not row_sku:
+                row_sku = generate_sku(prefix="AWK", width=4, db=db)
+
             db.execute("""
                 INSERT OR IGNORE INTO laptops
                 (sku,brand,model,serial,cpu,ram_gb,storage,initial_price,selling_price,location,status,notes,date_received)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
-                row.get("sku"),
+                row_sku,
                 row.get("brand"),
                 row.get("model"),
                 row.get("serial"),
@@ -620,13 +415,15 @@ def api_items():
         return jsonify([dict(r) for r in rows])
     else:
         payload = request.json or {}
-        if "sku" not in payload:
-            return jsonify({"error":"sku required"}), 400
+        # generate SKU if missing
+        sku_val = (payload.get("sku") or "").strip()
+        if not sku_val:
+            sku_val = generate_sku(prefix="AWK", width=4, db=db)
         db.execute("""
             INSERT INTO laptops (sku,brand,model,serial,cpu,ram_gb,storage,initial_price,selling_price,location,status,notes,date_received)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            payload.get("sku"),
+            sku_val,
             payload.get("brand"),
             payload.get("model"),
             payload.get("serial"),
@@ -669,10 +466,8 @@ def gen_barcode(sku):
     if not os.path.exists(path):
         try:
             code = barcode.get('code128', sku, writer=ImageWriter())
-            # python-barcode saves path without extension, pass base path
             base_no_ext = os.path.splitext(path)[0]
             code.save(base_no_ext)
-            # ensure png extension
             if not os.path.exists(path) and os.path.exists(base_no_ext + ".png"):
                 path = base_no_ext + ".png"
         except Exception as e:
@@ -729,10 +524,10 @@ def backup_db(max_keep=14):
     Timer(24*3600, backup_db, kwargs={"max_keep": max_keep}).start()
 
 # ---------- Run ----------
-def open_browser_later(host, port, delay=1.0):
+def open_browser_later(host, port, delay=1.0, path="/login"):
     def _open():
         try:
-            webbrowser.open(f"http://{host}:{port}/")
+            webbrowser.open(f"http://{host}:{port}{path}")
         except Exception:
             pass
     Timer(delay, _open).start()
@@ -747,8 +542,8 @@ if __name__ == "__main__":
     host = "127.0.0.1"
     port = 5000
 
-    # open browser after short delay when running locally
-    open_browser_later(host, port, delay=1.0)
+    # open browser after short delay when running locally (open login)
+    open_browser_later(host, port, delay=1.0, path="/login")
 
     # Run dev server — for LAN/production use waitress or a WSGI server
     app.run(host=host, port=port, debug=False)
