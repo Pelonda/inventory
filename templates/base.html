@@ -4,67 +4,66 @@
   <meta charset="utf-8">
   <title>Awaken Laptop Inventory</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica;max-width:1100px;margin:18px auto;padding:8px}
-    header{display:flex;align-items:center;gap:12px}
-    header img{height:58px}
-    nav{margin-left:auto}
-    nav a{margin-left:8px;text-decoration:none;color:#0366d6}
-    table{border-collapse:collapse;width:100%;margin-top:12px}
-    th,td{border:1px solid #eee;padding:8px;text-align:left}
-    th{background:#fafafa}
-    .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
-    .btn{background:#0366d6;color:#fff;padding:8px 10px;border-radius:6px;text-decoration:none;display:inline-block}
-    .btn.secondary{background:#6c757d}
-    input[type=text], input[type=number], textarea, select { width: 320px; padding:6px; margin:4px 0; }
-    label { display:block; margin:6px 0; }
-    .muted{color:#666;font-size:0.9em}
-    .small{font-size:0.9em}
-    .generated img{max-width:160px;height:auto}
-    footer{margin-top:18px;color:#666;font-size:0.85em;border-top:1px solid #eee;padding-top:8px}
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   {% block head %}{% endblock %}
 </head>
 <body>
-  <header>
-    <img src="{{ url_for('static', filename='img/awaken-logo.png') }}" alt="Awaken logo">
-    <h1 style="margin:0;font-size:1.6rem">Laptop Inventory</h1>
-    <nav>
-      {% if current_user.is_authenticated %}
-        <span class="small">Hello, {{ current_user.username }} ({{ current_user.role }})</span>
-        <a href="{{ url_for('logout') }}">Logout</a>
-      {% else %}
-        <a href="{{ url_for('login') }}">Login</a>
+  <!-- optional particle background -->
+  <div id="particles" style="position:fixed;inset:0;z-index:-1;pointer-events:none"></div>
+
+  <div class="container">
+    <header class="header card" role="banner">
+      <img class="logo" src="{{ url_for('static', filename='img/awaken-logo.png') }}" alt="Awaken logo">
+      <div>
+        <div class="title">Laptop Inventory</div>
+        <div class="small">Awaken — IT · Software · AI</div>
+      </div>
+      <div class="header-right">
+        {% if current_user.is_authenticated %}
+          <div class="small">Hello, {{ current_user.username }} ({{ current_user.role }})</div>
+          <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+          <a href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="controls">
+      <a class="btn" href="{{ url_for('add') }}">+ Add Laptop</a>
+      <a class="btn secondary" href="{{ url_for('export_csv') }}">Export CSV</a>
+      <a class="btn secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
+      <a class="btn secondary" href="{{ url_for('splash') }}">Splash</a>
+
+      <form action="{{ url_for('import_csv') }}" method="post" enctype="multipart/form-data" style="display:inline-flex;align-items:center;gap:8px;">
+        <input type="file" name="file" accept=".csv">
+        <button class="btn secondary" type="submit">Import CSV</button>
+      </form>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div>
+          {% for cat, msg in messages %}
+            <div style="padding:10px;margin-bottom:10px;border-radius:8px;background:{{ '#d4edda' if cat=='success' else '#f8d7da' }};color:{{ '#155724' if cat=='success' else '#721c24' }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
       {% endif %}
-    </nav>
-  </header>
+    {% endwith %}
 
-  <div class="controls">
-    <a class="btn" href="{{ url_for('add') }}">+ Add Laptop</a>
-    <a class="btn secondary" href="{{ url_for('export_csv') }}">Export CSV</a>
-    <a class="btn secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
-    <a class="btn secondary" href="{{ url_for('splash') }}">Splash</a>
+    {% block body %}{% endblock %}
 
-    <form action="{{ url_for('import_csv') }}" method="post" enctype="multipart/form-data" style="display:inline-block;margin-left:8px">
-      <input type="file" name="file" accept=".csv">
-      <button class="btn secondary" type="submit">Import CSV</button>
-    </form>
+    <footer class="muted" style="margin-top:18px">Simple Flask + SQLite demo — For production: add HTTPS, backups, auth hardening, and a proper DB.</footer>
   </div>
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div>
-        {% for cat, msg in messages %}
-          <div style="padding:8px;margin-bottom:8px;border-radius:6px;background:{{ '#d4edda' if cat=='success' else '#f8d7da' }};color:{{ '#155724' if cat=='success' else '#721c24' }}">{{ msg }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
+  <!-- particles (optional) -->
+  <script src="{{ url_for('static', filename='js/particles.js') }}"></script>
+  <script>
+    // if particles.js defines initParticles() call it, otherwise safe no-op
+    if (typeof initParticles === 'function') {
+      initParticles('particles');
+    }
+  </script>
 
-  {% block body %}{% endblock %}
-
-  <footer>
-    <div class="muted">Simple Flask + SQLite demo — For production: add HTTPS, backups, auth hardening, and a proper DB.</div>
-  </footer>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
